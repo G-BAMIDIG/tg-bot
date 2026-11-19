@@ -1,0 +1,20 @@
+# Secrets - never commit these
+.env
+secret.key
+
+# Database - contains real user data, wallet balances, encrypted configs
+vpnbot.db
+
+# Telethon session - equivalent to being logged into your personal Telegram
+# account. If this leaks, treat it like a leaked password: log out of that
+# session from Telegram's Settings > Devices immediately.
+*.session
+*.session-journal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+scraper.log
