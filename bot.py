@@ -41,7 +41,6 @@ from config import (
     SUPPORT_USERNAME,
     TIMEZONE,
     OPEN_HOUR,
-    DB_PATH,
 )
 from extra_config import (
     ORDER_EXPIRY_MINUTES,
@@ -1771,7 +1770,7 @@ def admin_refund_flow(message):
 
 # ---------------- Admin: backups ----------------
 def _send_backup(chat_id, automatic=False):
-    path = backup_mod.make_backup_zip(DB_PATH)
+    path = backup_mod.make_backup_zip()
     try:
         with open(path, "rb") as f:
             bot.send_document(

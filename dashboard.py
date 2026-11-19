@@ -437,9 +437,9 @@ def v_settings(p):
 
 
 def v_health(p):
-    size = os.path.getsize(db.DB_PATH) if os.path.exists(db.DB_PATH) else 0
+    size = None
     counts = {t: _one(f"SELECT COUNT(*) n FROM {t}")["n"] for t in ("users", "orders", "subscriptions", "refunds", "bans")}
-    rows = [["Database size", f"{size / 1024:.1f} KB"], ["Python", platform.python_version()],
+    rows = [["Database", "Supabase PostgreSQL"], ["Python", platform.python_version()],
             ["Dashboard uptime", f"{int(time.time() - _STARTED) // 60} minutes"]] + [[k, v] for k, v in counts.items()]
     return _table("Health", ["Item", "Value"], rows)
 

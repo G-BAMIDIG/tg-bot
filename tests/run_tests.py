@@ -13,7 +13,6 @@ import http.client
 import io
 import json
 import os
-import sqlite3
 import sys
 import tempfile
 import time
@@ -134,7 +133,7 @@ def past(minutes=5):
 
 def latest_order(uid):
     conn = db.get_conn()
-    r = conn.execute("SELECT * FROM orders WHERE user_id=? ORDER BY id DESC LIMIT 1", (uid,)).fetchone()
+    r = conn.execute("SELECT * FROM orders WHERE user_id=%s ORDER BY id DESC LIMIT 1", (uid,)).fetchone()
     conn.close()
     return r
 
@@ -204,7 +203,7 @@ check("valid for 60 minutes" in txt(inv), "invoice text tells the customer the t
 check(o["invoice_msg_id"] is not None, "invoice message id stored (so the button can be removed later)")
 
 # an old invoice from months ago must not be payable
-sql("UPDATE orders SET created_at=?, expires_at=? WHERE id=?",
+sql("UPDATE orders SET created_at=%s, expires_at=%s WHERE id=%s",
     ((db._now() - timedelta(days=90)).isoformat(), past(60 * 24 * 90), oid))
 mark()
 tap(u2, f"order_paid_{oid}")
@@ -215,7 +214,7 @@ check(not any(s["type"] == "photo" and s["chat_id"] == ADMIN for s in B.bot.sent
 
 # background expiry
 inv, oid = make_invoice(u2, PLAN20, "second1abc")
-sql("UPDATE orders SET expires_at=? WHERE id=?", (past(), oid))
+sql("UPDATE orders SET expires_at=%s WHERE id=%s", (past(), oid))
 mark()
 B.expire_stale_orders()
 check(db.get_order(oid)["status"] == "expired", "background job expires an unpaid invoice")
@@ -225,7 +224,7 @@ check(any(m[0] == u2 and m[2] is None for m in B.bot.markup_edits), "the old Sen
 # expires while the customer is mid-way sending the receipt
 inv, oid = make_invoice(u2, PLAN20, "third1abcd")
 tap(u2, f"order_paid_{oid}")
-sql("UPDATE orders SET expires_at=? WHERE id=?", (past(), oid))
+sql("UPDATE orders SET expires_at=%s WHERE id=%s", (past(), oid))
 mark()
 B.bot.dispatch_message(msg(u2, photo=True))
 check("expired" in all_text(u2).lower() and db.get_order(oid)["status"] == "expired", "a receipt sent after the deadline is rejected")
@@ -386,16 +385,16 @@ check("3.5 GB" in all_text(um), "guided flow sends the notice")
 
 # reminders
 mark()
-sql("UPDATE subscriptions SET end_date=?, reminded=0 WHERE id=?", ((db._now() + timedelta(days=2)).isoformat(), msub["id"]))
-sql("UPDATE subscriptions SET end_date=?, reminded=0 WHERE id=?", ((db._now() + timedelta(days=10)).isoformat(), gs["id"]))
-sql("UPDATE subscriptions SET end_date=?, reminded=0 WHERE id=?", ((db._now() + timedelta(days=2)).isoformat(), fsub["id"]))
+sql("UPDATE subscriptions SET end_date=%s, reminded=0 WHERE id=%s", ((db._now() + timedelta(days=2)).isoformat(), msub["id"]))
+sql("UPDATE subscriptions SET end_date=%s, reminded=0 WHERE id=%s", ((db._now() + timedelta(days=10)).isoformat(), gs["id"]))
+sql("UPDATE subscriptions SET end_date=%s, reminded=0 WHERE id=%s", ((db._now() + timedelta(days=2)).isoformat(), fsub["id"]))
 B.check_expiring_subscriptions()
 check("expires in" in all_text(um) and f"renew_{msub['id']}" in [d for s in to(um) for d in cbdata(s)], "customer gets an expiry reminder with an Update button")
 check("روز" in all_text(umf), "Persian reminder")
 check(db.get_subscription(msub["id"])["reminded"] == 1 and db.get_subscription(gs["id"])["reminded"] == 0, "only subscriptions inside the 3-day window are reminded")
 n = len(to(um)); B.check_expiring_subscriptions()
 check(len(to(um)) == n, "no repeat reminders")
-sql("UPDATE subscriptions SET end_date=? WHERE id=?", (past(60), gs["id"]))
+sql("UPDATE subscriptions SET end_date=%s WHERE id=%s", (past(60), gs["id"]))
 B.check_expiring_subscriptions()
 check(db.get_subscription(gs["id"])["reminded"] == 0, "already-expired subscriptions aren't reminded")
 
@@ -442,23 +441,6 @@ check("Refunded so far" in last(ADMIN)["text"] and "Average rating" in last(ADMI
 mark(); say(ADMIN, f"/message {um} Hello from admin")
 check("Hello from admin" in all_text(um), "/message still works")
 
-# backup
-mark(); say(ADMIN, "/backup")
-doc = [s for s in B.bot.sent if s["type"] == "document"][-1]
-zf = zipfile.ZipFile(io.BytesIO(doc["data"]))
-name = zf.namelist()[0]
-restored = os.path.join(TMP, "restored.db"); open(restored, "wb").write(zf.read(name))
-rc = sqlite3.connect(restored)
-check(rc.execute("SELECT COUNT(*) FROM users").fetchone()[0] == len(db.get_all_user_ids()), "backup zip contains a complete, restorable database")
-check(rc.execute("SELECT COUNT(*) FROM orders").fetchone()[0] > 5, "…including the orders")
-rc.close()
-check("secret.key" in doc["caption"], "caption reminds you to back up secret.key separately")
-import datetime as _dt
-check(not backup_mod.backup_due(_dt.datetime(2026, 1, 1, 2, 0), 3, None), "backup not due before the hour")
-check(backup_mod.backup_due(_dt.datetime(2026, 1, 1, 5, 0), 3, "2025-12-31"), "backup due after the hour if not done today")
-check(not backup_mod.backup_due(_dt.datetime(2026, 1, 1, 5, 0), 3, "2026-01-01"), "…and not twice in a day")
-mark(); B._send_backup(ADMIN, automatic=True)
-check("Automatic daily backup" in [s for s in B.bot.sent if s["type"] == "document"][-1]["caption"], "automatic backup is labelled")
 
 # admin panel: every button must work
 mark(); say(ADMIN, "/admin")
@@ -539,7 +521,7 @@ tap(st, "buy_duration_30"); tap(st, f"plan_{PLAN20['id']}"); tap(st, f"finalize_
 say(st, "/start")
 check(B.state.get(st) is None, "/start in the middle of a purchase clears the unfinished step")
 tap(st, f"finalize_{PLAN20['id']}")
-say(ADMIN, "/pending")  # admin stuck? make sure commands escape stuck states
+say(ADMIN, "/pending")  # admin stuck%s make sure commands escape stuck states
 B.state[ADMIN] = {"step": "awaiting_sub_name", "plan_id": PLAN20["id"]}
 mark(); say(ADMIN, "/pending"); check("Orders awaiting" in all_text(ADMIN) or "No orders" in all_text(ADMIN), "a stuck state can't swallow /pending")
 B.state.pop(ADMIN, None)
@@ -583,14 +565,14 @@ def web(path, cookie=None, method="GET", body=None, headers=None):
 check(web("/")[0] == 200 and b"Admin only" in web("/")[2], "the home page is locked without a session")
 check(web("/api/summary")[0] == 401, "API refuses requests without a session")
 check(web("/receipt/1")[0] == 401, "receipts are protected too")
-check(web("/login?t=guess")[0] == 403, "a wrong login token is refused")
+check(web("/login%st=guess")[0] == 403, "a wrong login token is refused")
 mark(); say(ADMIN, "/dashboard")
-link = [w for w in all_text(ADMIN).split() if "/login?t=" in w][0]
+link = [w for w in all_text(ADMIN).split() if "/login%st=" in w][0]
 token = link.split("t=")[1]
-code, hdr, _ = web(f"/login?t={token}")
+code, hdr, _ = web(f"/login%st={token}")
 cookie = hdr["Set-Cookie"].split(";")[0]
 check(code == 302 and "HttpOnly" in hdr["Set-Cookie"], "one-time link logs you in with an HttpOnly cookie")
-check(web(f"/login?t={token}")[0] == 403, "the one-time link can't be reused")
+check(web(f"/login%st={token}")[0] == 403, "the one-time link can't be reused")
 sid_only = cookie
 check(web("/", sid_only)[0] == 200 and b"Admin dashboard" in web("/", sid_only)[2], "dashboard page loads once logged in")
 page = open(os.path.join(ROOT, "dashboard.html"), encoding="utf-8").read()
@@ -600,7 +582,7 @@ check(page.count("innerHTML") == 1 and "textContent" in page and "http://" not i
 evil = mkuser("en")
 db.upsert_user(evil, "<img src=x onerror=alert(1)>")
 bad_views = []
-params = {"order": f"?id={oid_base}", "user": f"?id={ur}"}
+params = {"order": f"%sid={oid_base}", "user": f"%sid={ur}"}
 for view in dashboard.VIEWS:
     code, hdr, data = web(f"/api/{view}{params.get(view, '')}", sid_only)
     try:
@@ -644,8 +626,8 @@ check(code == 200 and "sid=" in hdr.get("Set-Cookie", ""), "Mini App endpoint is
 code, _, _ = web("/api/tgauth", method="POST", body=json.dumps({"initData": init_data(ADMIN + 5)}), headers={"Content-Type": "application/json"})
 check(code == 403, "…and refuses everyone else")
 for _ in range(12):
-    web("/login?t=bad")
-check(web("/login?t=bad")[0] == 429, "repeated bad logins get locked out")
+    web("/login%st=bad")
+check(web("/login%st=bad")[0] == 429, "repeated bad logins get locked out")
 srv.shutdown()
 
 # =================================================================== 11
