@@ -46,8 +46,8 @@ BACKUP_HOUR = _int("BACKUP_HOUR", 3)                # local hour (TIMEZONE) of t
 
 # ---- admin dashboard ----
 DASHBOARD_ENABLED = _int("DASHBOARD_ENABLED", 1)
-DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "127.0.0.1")
-DASHBOARD_PORT = _int("DASHBOARD_PORT", 8080)
+DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
+DASHBOARD_PORT = _int("DASHBOARD_PORT", int(os.getenv("PORT", "8080")))
 DASHBOARD_PUBLIC_URL = os.getenv("DASHBOARD_PUBLIC_URL", "").rstrip("/")
 
 # optional; looked up from Telegram automatically if empty
